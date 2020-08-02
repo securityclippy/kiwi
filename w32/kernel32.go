@@ -1,6 +1,7 @@
 package w32
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -45,7 +46,11 @@ func CreateToolhelp32Snapshot(dwFlags uint32, th32ProcessID uint32) (HANDLE, boo
 }
 
 func Module32First(hSnapshot HANDLE, lpme *MODULEENTRY32) bool {
+	lpme = &MODULEENTRY32{}
 	ret, _, _ := pModule32First.Call(uintptr(hSnapshot), uintptr(unsafe.Pointer(&lpme)))
+
+	fmt.Printf("lpm: %+v\n", lpme)
+
 	return ret == 1
 }
 

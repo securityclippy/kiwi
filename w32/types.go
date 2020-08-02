@@ -17,3 +17,21 @@ type MODULEENTRY32 struct {
 	SzModule      [MAX_MODULE_NAME32 + 1]uint16
 	SzExePath     [MAX_PATH]uint16
 }
+
+/*
+typedef struct _MODULEINFO {
+LPVOID lpBaseOfDll;
+DWORD  SizeOfImage;
+LPVOID EntryPoint;
+} MODULEINFO, *LPMODULEINFO;
+ */
+
+type MODULEINFO struct {
+	lpBaseofDll *uint8
+	SizeOfImage uint32
+	EntryPoint *uint8
+}
+
+func (m *MODULEINFO) BaseAddress() *uint8 {
+	return m.lpBaseofDll
+}

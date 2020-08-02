@@ -3,12 +3,14 @@ package kiwi
 import (
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"syscall"
 	"unsafe"
 
-	"github.com/Andoryuuta/kiwi/w32"
+	"github.com/securityclippy/kiwi/w32"
 	"golang.org/x/sys/windows"
 )
 
@@ -97,6 +99,55 @@ func GetProcessByFileName(fileName string) (Process, error) {
 	return Process{}, errors.New("couldn't find process with name " + fileName)
 }
 
+
+func (p *Process) PrintModules() {
+	handle, err := syscall.OpenProcess(w32.PROCESS_QUERY_INFORMATION | w32.PROCESS_VM_READ, false, uint32(p.PID))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Process ID: %+v\n", p.PID)
+
+	fmt.Println(handle)
+
+
+	var cbNeeded uint32
+
+
+	modules := make([]w32.HMODULE, 1024)
+
+
+	mInfos := make([]w32.MODULEINFO, len(modules))
+	if w32.EnumProcessModules(handle, modules, uint32(len(modules)), &cbNeeded) {
+
+
+		enumMods:
+		for k, v := range modules {
+
+
+			SzModule := make([]uint16, w32.MAX_PATH+1)
+			ok, fn := w32.GetModuleFileNameExA(syscall.Handle(p.Handle), syscall.Handle(v), SzModule)
+			if ok {
+				if strings.Contains(fn, "WowClassic.exe") {
+					ok, info := w32.GetModuleInformation(syscall.Handle(p.Handle), v, mInfos[k])
+					if ok {
+						if info.BaseAddress() != nil {
+							fmt.Printf("base address: %+v\n", info.BaseAddress())
+							fmt.Printf("%+v\n", info)
+							break enumMods
+						}
+					}
+
+				}
+
+			}
+
+
+		}
+
+	}
+}
+
+
 // GetModuleBase takes a module name as an argument. (e.g. "kernel32.dll")
 // Returns the modules base address.
 //
@@ -107,6 +158,8 @@ func (p *Process) GetModuleBase(moduleName string) (uintptr, error) {
 	if !ok {
 		return 0, fmt.Errorf("CreateToolhelp32Snapshot: %w", windows.GetLastError())
 	}
+
+	fmt.Printf("Snap: %+v\n", snap)
 	defer w32.CloseHandle(snap)
 
 	var me32 w32.MODULEENTRY32
@@ -132,6 +185,42 @@ func (p *Process) GetModuleBase(moduleName string) (uintptr, error) {
 
 	// Module couldn't be found.
 	return 0, errors.New("couldn't find module")
+}
+
+
+func (p *Process) ListProcessModules() (uintptr, error) {
+	snap, ok := w32.CreateToolhelp32Snapshot(w32.TH32CS_SNAPMODULE32|w32.TH32CS_SNAPALL|w32.TH32CS_SNAPMODULE, uint32(p.PID))
+	if !ok {
+		return 0, fmt.Errorf("CreateToolhelp32Snapshot: %w", windows.GetLastError())
+	}
+	defer w32.CloseHandle(snap)
+
+	var me32 w32.MODULEENTRY32
+	me32.DwSize = uint32(unsafe.Sizeof(me32))
+	fmt.Println(snap)
+
+	// Get first module.
+	//if !w32.Module32First(snap, &me32) {
+		//return 0, fmt.Errorf("Module32First: %w", windows.GetLastError())
+	//}
+
+	// Check first module.
+	//if syscall.UTF16ToString(me32.SzModule[:]) == moduleName {
+		//return uintptr(unsafe.Pointer(me32.ModBaseAddr)), nil
+	//}
+
+	// Loop all modules remaining.
+	for w32.Module32Next(snap, &me32) {
+		fmt.Println(syscall.UTF16ToString(me32.SzModule[:]))
+		// Check this module.
+		//if syscall.UTF16ToString(me32.SzModule[:]) == moduleName {
+			//return uintptr(unsafe.Pointer(me32.ModBaseAddr)), nil
+		//}
+	}
+
+	// Module couldn't be found.
+	//return 0, errors.New("couldn't find module")
+	return 0, nil
 }
 
 // The platform specific read function.
